@@ -13,6 +13,8 @@ from PIL import Image
 import os
 from pathlib import Path
 
+from tensorboard.summary.v1 import image_pb
+
 # Configuración de la página
 st.set_page_config( page_title="Predicción de Temperaturas con LSTM", page_icon="🌡️", layout="wide", initial_sidebar_state="expanded")
 
@@ -50,8 +52,7 @@ st.markdown("""
 # Funciones auxiliares y cache
 
 @st.cache_data
-def cargaPredicciones():
-    """Carga el archivo de predicciones"""
+def cargaPredicciones(): #Carga el archivo de predicciones
     try:
         df = pd.read_csv('outputs/predictions.csv')
         return df
@@ -60,8 +61,7 @@ def cargaPredicciones():
         return None
 
 @st.cache_data
-def load_metrics():
-    """Carga las métricas del modelo"""
+def cargaMetricas(): #Carga las métricas del modelo
     try:
         df = pd.read_csv('outputs/final_metrics.csv')
         return df.iloc[0].to_dict()
@@ -70,8 +70,7 @@ def load_metrics():
         return None
 
 @st.cache_data
-def load_dataset():
-    """Carga el dataset original"""
+def cargaDataset(): #Carga el dataset original
     try:
         df = pd.read_csv('data/1_Daily_minimum_temps.xls')
         df['Temp'] = df['Temp'].astype(str).str.replace('?', '-', regex=False)
@@ -85,10 +84,9 @@ def load_dataset():
         return None
 
 @st.cache_resource
-def load_model_and_scaler():
-    """Carga el modelo entrenado y el scaler"""
+def cargaModeloEntranadoEscalado(): #Carga el modelo entrenado y el scaler
     try:
-        # Intentar importar TensorFlow
+        # Intentar importar TensorFlow, si no está instalado, mostrar mensaje
         try:
             from tensorflow.keras.models import load_model
         except ImportError:
@@ -102,50 +100,40 @@ def load_model_and_scaler():
         model = load_model('outputs/best_model_final.keras')
         
         # Recrear scaler con los mismos datos de entrenamiento
-        df = load_dataset()
+        df = cargaDataset()
         if df is not None:
             scaler = MinMaxScaler(feature_range=(0, 1))
             scaler.fit(df[['Temp']].values)
             return model, scaler
         return None, None
     except FileNotFoundError:
-        st.error("❌ No se encontró el archivo del modelo: 'outputs/best_model_final.keras'")
-        st.info("💡 Asegúrate de que el modelo está en la carpeta 'outputs/'")
+        st.error("No se encontró el archivo del modelo: 'outputs/best_model_final.keras'")
+        st.info("Asegúrate de que el modelo está en la carpeta 'outputs/'")
         return None, None
     except Exception as e:
-        st.error(f"❌ Error al cargar modelo: {e}")
-        st.info("💡 Si el problema persiste, intenta reinstalar TensorFlow: `pip install tensorflow --force-reinstall`")
+        st.error(f"Error al cargar modelo: {e}")
+        st.info("Si el problema persiste, intenta reinstalar TensorFlow: `pip install tensorflow --force-reinstall`")
         return None, None
 
-def make_prediction(sequence, model, scaler):
-    """
-    Realiza una predicción dado una secuencia de 60 valores
-    
-    Args:
-        sequence: Array de 60 valores de temperatura
-        model: Modelo LSTM cargado
-        scaler: MinMaxScaler para normalización
-    
-    Returns:
-        Predicción desnormalizada
-    """
+def realizarPrediccion(sequence, model, scaler):
+    # Realiza una predicción dado una secuencia de 60 valores, recibe el modelo y el scaler.
+
     # Normalizar la secuencia
-    sequence_scaled = scaler.transform(sequence.reshape(-1, 1))
+    secuenciaNormalizada = scaler.transform(sequence.reshape(-1, 1))
     
     # Reshape para LSTM [samples, time_steps, features]
-    sequence_reshaped = sequence_scaled.reshape(1, 60, 1)
+    secuenciaReshaped = secuenciaNormalizada.reshape(1, 60, 1)
     
     # Hacer predicción
-    prediction_scaled = model.predict(sequence_reshaped, verbose=0)
+    predictionEscalada = model.predict(secuenciaReshaped, verbose=0)
     
     # Desnormalizar
-    prediction = scaler.inverse_transform(prediction_scaled)
+    predictionFinal = scaler.inverse_transform(predictionEscalada)
     
-    return prediction[0][0]
+    return predictionFinal[0][0]
 
-# ============================================================================
-# HEADER Y TÍTULO
-# ============================================================================
+ # ----------------------------------------------------------------------------
+# Header y titulo principal
 
 st.markdown('<h1 class="main-header">🌡️ Predicción de Temperaturas con LSTM</h1>', unsafe_allow_html=True)
 
@@ -159,19 +147,16 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ============================================================================
-# SIDEBAR
-# ============================================================================
+# ---------------------------------------------------------------------------
+# Sidebar
 
 st.sidebar.title("🎛️ Panel de Control")
 st.sidebar.markdown("---")
 
 # Selector de sección
-section = st.sidebar.radio(
+seccion = st.sidebar.radio(
     "Navegar a:",
-    ["📊 Métricas y Resultados", "🎯 Predicción Interactiva", "📈 Visualizaciones", "⚙️ Configuración del Modelo"],
-    label_visibility="visible"
-)
+    ["📊 Métricas y Resultados", "🎯 Predicción Interactiva", "📈 Visualizaciones", "⚙️ Configuración del Modelo"], label_visibility="visible")
 
 st.sidebar.markdown("---")
 st.sidebar.info("""
@@ -186,25 +171,22 @@ Este modelo LSTM fue entrenado para predecir temperaturas mínimas diarias usand
 - Learning Rate: 0.001
 """)
 
-# ============================================================================
+# ----------------------------------------------------------------------------
 # SECCIÓN 1: MÉTRICAS Y RESULTADOS
-# ============================================================================
 
-if section == "📊 Métricas y Resultados":
-    
+
+if seccion == "📊 Métricas y Resultados":
     st.header("📊 Métricas de Evaluación del Modelo")
-    
     # Cargar métricas
-    metrics = load_metrics()
+    metricas = cargaMetricas()
     
-    if metrics:
-        # Métricas principales en columnas
+    if metricas: #Metricas en forma de KPIs
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
             st.metric(
                 label="📉 RMSE",
-                value=f"{metrics['RMSE']:.2f}°C",
+                value=f"{metricas['RMSE']:.2f}°C",
                 delta=None,
                 help="Root Mean Squared Error - Menor es mejor"
             )
@@ -212,7 +194,7 @@ if section == "📊 Métricas y Resultados":
         with col2:
             st.metric(
                 label="📊 MAE",
-                value=f"{metrics['MAE']:.2f}°C",
+                value=f"{metricas['MAE']:.2f}°C",
                 delta=None,
                 help="Mean Absolute Error - Menor es mejor"
             )
@@ -220,7 +202,7 @@ if section == "📊 Métricas y Resultados":
         with col3:
             st.metric(
                 label="🎯 R²",
-                value=f"{metrics['R2']:.4f}",
+                value=f"{metricas['R2']:.4f}",
                 delta=None,
                 help="Coeficiente de Determinación - Cercano a 1 es mejor"
             )
@@ -228,7 +210,7 @@ if section == "📊 Métricas y Resultados":
         with col4:
             st.metric(
                 label="📈 MAPE",
-                value=f"{metrics['MAPE']:.2f}%",
+                value=f"{metricas['MAPE']:.2f}%",
                 delta=None,
                 help="Mean Absolute Percentage Error - Menor es mejor"
             )
@@ -241,17 +223,17 @@ if section == "📊 Métricas y Resultados":
         col1, col2 = st.columns(2)
         
         with col1:
-            if metrics['MAPE'] < 10:
+            if metricas['MAPE'] < 10:
                 st.success("✅ **MAPE < 10%:** Predicciones muy precisas")
-            elif metrics['MAPE'] < 20:
+            elif metricas['MAPE'] < 20:
                 st.info("ℹ️ **MAPE 10-20%:** Predicciones buenas")
             else:
                 st.warning("⚠️ **MAPE > 20%:** Predicciones con margen de mejora")
         
         with col2:
-            if metrics['R2'] > 0.9:
+            if metricas['R2'] > 0.9:
                 st.success("✅ **R² > 0.9:** Excelente ajuste del modelo")
-            elif metrics['R2'] > 0.7:
+            elif metricas['R2'] > 0.7:
                 st.info("ℹ️ **R² 0.7-0.9:** Buen ajuste del modelo")
             else:
                 st.warning("⚠️ **R² < 0.7:** Ajuste del modelo mejorable")
@@ -261,15 +243,15 @@ if section == "📊 Métricas y Resultados":
         # Gráficos de predicciones
         st.subheader("📈 Predicciones vs Valores Reales")
         
-        predictions_df = cargaPredicciones()
+        prediccionesDf = cargaPredicciones()
         
-        if predictions_df is not None:
+        if prediccionesDf is not None:
             # Gráfico interactivo con Plotly
             fig = go.Figure()
             
             # Valores reales
             fig.add_trace(go.Scatter(
-                y=predictions_df['real'],
+                y=prediccionesDf['real'],
                 mode='lines',
                 name='Valores Reales',
                 line=dict(color='#2E86AB', width=2),
@@ -278,7 +260,7 @@ if section == "📊 Métricas y Resultados":
             
             # Predicciones
             fig.add_trace(go.Scatter(
-                y=predictions_df['prediccion'],
+                y=prediccionesDf['prediccion'],
                 mode='lines',
                 name='Predicciones',
                 line=dict(color='#E94F37', width=2, dash='dash'),
@@ -287,7 +269,7 @@ if section == "📊 Métricas y Resultados":
             
             # Área de error
             fig.add_trace(go.Scatter(
-                y=predictions_df['real'],
+                y=prediccionesDf['real'],
                 fill=None,
                 mode='lines',
                 line_color='rgba(0,0,0,0)',
@@ -295,7 +277,7 @@ if section == "📊 Métricas y Resultados":
             ))
             
             fig.add_trace(go.Scatter(
-                y=predictions_df['prediccion'],
+                y=prediccionesDf['prediccion'],
                 fill='tonexty',
                 mode='lines',
                 line_color='rgba(0,0,0,0)',
@@ -322,15 +304,15 @@ if section == "📊 Métricas y Resultados":
             
             with col1:
                 # Scatter plot
-                fig_scatter = go.Figure()
+                figScatter = go.Figure()
                 
-                fig_scatter.add_trace(go.Scatter(
-                    x=predictions_df['real'],
-                    y=predictions_df['prediccion'],
+                figScatter.add_trace(go.Scatter(
+                    x=prediccionesDf['real'],
+                    y=prediccionesDf['prediccion'],
                     mode='markers',
                     marker=dict(
                         size=6,
-                        color=predictions_df['error'].abs(),
+                        color=prediccionesDf['error'].abs(),
                         colorscale='Viridis',
                         showscale=True,
                         colorbar=dict(title="Error Abs."),
@@ -340,41 +322,41 @@ if section == "📊 Métricas y Resultados":
                 ))
                 
                 # Línea de predicción perfecta
-                min_val = min(predictions_df['real'].min(), predictions_df['prediccion'].min())
-                max_val = max(predictions_df['real'].max(), predictions_df['prediccion'].max())
-                
-                fig_scatter.add_trace(go.Scatter(
-                    x=[min_val, max_val],
-                    y=[min_val, max_val],
+                minVal = min(prediccionesDf['real'].min(), prediccionesDf['prediccion'].min())
+                maxVal = max(prediccionesDf['real'].max(), prediccionesDf['prediccion'].max())
+
+                figScatter.add_trace(go.Scatter(
+                    x=[minVal, maxVal],
+                    y=[minVal, maxVal],
                     mode='lines',
                     line=dict(color='red', dash='dash', width=2),
                     name='Predicción Perfecta',
                     hoverinfo='skip'
                 ))
                 
-                fig_scatter.update_layout(
-                    title=f'Predicciones vs Valores Reales (R² = {metrics["R2"]:.4f})',
+                figScatter.update_layout(
+                    title=f'Predicciones vs Valores Reales (R² = {metricas["R2"]:.4f})',
                     xaxis_title='Valores Reales (°C)',
                     yaxis_title='Predicciones (°C)',
                     height=500,
                     template='plotly_white'
                 )
                 
-                fig_scatter.update_xaxes(scaleanchor="y", scaleratio=1)
-                fig_scatter.update_yaxes(scaleanchor="x", scaleratio=1)
+                figScatter.update_xaxes(scaleanchor="y", scaleratio=1)
+                figScatter.update_yaxes(scaleanchor="x", scaleratio=1)
                 
-                st.plotly_chart(fig_scatter, use_container_width=True)
+                st.plotly_chart(figScatter, use_container_width=True)
             
             with col2:
                 st.markdown("### 📊 Estadísticas de Error")
-                st.metric("Error Máximo", f"{predictions_df['error'].abs().max():.2f}°C")
-                st.metric("Error Medio", f"{predictions_df['error'].mean():.2f}°C")
-                st.metric("Desv. Est. Error", f"{predictions_df['error'].std():.2f}°C")
+                st.metric("Error Máximo", f"{prediccionesDf['error'].abs().max():.2f}°C")
+                st.metric("Error Medio", f"{prediccionesDf['error'].mean():.2f}°C")
+                st.metric("Desv. Est. Error", f"{prediccionesDf['error'].std():.2f}°C")
                 
                 # Distribución de errores
                 fig_hist = go.Figure()
                 fig_hist.add_trace(go.Histogram(
-                    x=predictions_df['error'],
+                    x=prediccionesDf['error'],
                     nbinsx=30,
                     marker_color='#667eea',
                     opacity=0.7
@@ -389,11 +371,11 @@ if section == "📊 Métricas y Resultados":
                 )
                 st.plotly_chart(fig_hist, use_container_width=True)
 
-# ============================================================================
+# ---------------------------------------------------------------------------
 # SECCIÓN 2: PREDICCIÓN INTERACTIVA
-# ============================================================================
+# En esta sección, el usuario puede ingresar sus propios datos para hacer predicciones, tiene 2 modos: predicción rápida desde el dataset y predicción personalizada con datos ingresados manualmente.
 
-elif section == "🎯 Predicción Interactiva":
+elif seccion == "🎯 Predicción Interactiva":
     
     st.header("🎯 Haz tu Propia Predicción")
     
@@ -407,12 +389,11 @@ elif section == "🎯 Predicción Interactiva":
     """, unsafe_allow_html=True)
     
     # Cargar modelo y scaler
-    model, scaler = load_model_and_scaler()
+    model, scaler = cargaModeloEntranadoEscalado()
     
     if model is None or scaler is None:
-        st.error("❌ No se pudo cargar el modelo. Verifica que existe el archivo 'outputs/best_model_final.keras'")
+        st.error(" No se pudo cargar el modelo. Verifica que existe el archivo 'outputs/best_model_final.keras'")
     else:
-        # Tabs para los dos modos de predicción
         st.markdown("""
         <style>
             .stTabs [data-baseweb="tab"] p {
@@ -423,48 +404,48 @@ elif section == "🎯 Predicción Interactiva":
 
         tab1, tab2 = st.tabs(["🚀 Predicción Rápida", "✏️ Predicción Personalizada"])
         
-        # ========== TAB 1: PREDICCIÓN RÁPIDA ==========
+        # TAB 1: PREDICCIÓN RÁPIDA
         with tab1:
             st.subheader("🚀 Predicción Rápida desde el Dataset")
             
-            df_original = load_dataset()
+            dfOriginal = cargaDataset()
             
-            if df_original is not None:
+            if dfOriginal is not None:
                 st.markdown("Selecciona una fecha del dataset para predecir el siguiente día:")
                 
                 # Fechas disponibles (después del día 60 para tener secuencia)
-                available_dates = df_original.index[60:]
+                fechasDisponibles = dfOriginal.index[60:]
                 
-                selected_date = st.date_input(
+                seleccionDeFechas = st.date_input(
                     "Fecha de referencia:",
-                    value=available_dates[100],
-                    min_value=available_dates[0].date(),
-                    max_value=available_dates[-1].date(),
+                    value=fechasDisponibles[100],
+                    min_value=fechasDisponibles[0].date(),
+                    max_value=fechasDisponibles[-1].date(),
                     help="Se usarán los 60 días anteriores a esta fecha para hacer la predicción"
                 )
                 
                 if st.button("🔮 Predecir", key="predict_quick", type="primary"):
                     # Convertir a datetime
-                    selected_datetime = pd.to_datetime(selected_date)
+                    conversionDatetime = pd.to_datetime(seleccionDeFechas)
                     
                     # Obtener el índice en el dataset
                     try:
-                        idx = df_original.index.get_loc(selected_datetime)
+                        idx = dfOriginal.index.get_loc(conversionDatetime)
                         
                         if idx < 60:
                             st.error("⚠️ No hay suficientes datos históricos para esta fecha. Selecciona una fecha posterior.")
                         else:
                             # Obtener secuencia de 60 días
-                            sequence = df_original['Temp'].iloc[idx-60:idx].values
+                            sequence = dfOriginal['Temp'].iloc[idx - 60:idx].values
                             
                             # Hacer predicción
                             with st.spinner('Calculando predicción...'):
-                                prediction = make_prediction(sequence, model, scaler)
+                                prediction = realizarPrediccion(sequence, model, scaler)
                             
                             # Obtener valor real si existe
-                            real_value = None
-                            if idx < len(df_original):
-                                real_value = df_original['Temp'].iloc[idx]
+                            valorReal = None
+                            if idx < len(dfOriginal):
+                                valorReal = dfOriginal['Temp'].iloc[idx]
                             
                             # Mostrar resultados
                             st.success("✅ Predicción completada!")
@@ -478,12 +459,12 @@ elif section == "🎯 Predicción Interactiva":
                                     help="Temperatura mínima predicha para el día siguiente"
                                 )
                             
-                            if real_value is not None:
-                                error = real_value - prediction
+                            if valorReal is not None:
+                                error = valorReal - prediction
                                 with col2:
                                     st.metric(
                                         label="📊 Valor Real",
-                                        value=f"{real_value:.2f}°C",
+                                        value=f"{valorReal:.2f}°C",
                                         delta=None
                                     )
                                 with col3:
@@ -499,12 +480,12 @@ elif section == "🎯 Predicción Interactiva":
                             st.subheader("📊 Secuencia de Entrada (60 días)")
                             
                             # Crear fechas para la secuencia
-                            seq_dates = df_original.index[idx-60:idx]
+                            secuenciaFechas = dfOriginal.index[idx - 60:idx]
                             
-                            fig_seq = go.Figure()
+                            figSecuenciasPerso = go.Figure()
                             
-                            fig_seq.add_trace(go.Scatter(
-                                x=seq_dates,
+                            figSecuenciasPerso.add_trace(go.Scatter(
+                                x=secuenciaFechas,
                                 y=sequence,
                                 mode='lines+markers',
                                 name='Temperaturas (60 días)',
@@ -513,9 +494,9 @@ elif section == "🎯 Predicción Interactiva":
                             ))
                             
                             # Agregar predicción
-                            next_date = selected_datetime + pd.Timedelta(days=1)
-                            fig_seq.add_trace(go.Scatter(
-                                x=[seq_dates[-1], next_date],
+                            proximaFechas = conversionDatetime + pd.Timedelta(days=1)
+                            figSecuenciasPerso.add_trace(go.Scatter(
+                                x=[secuenciaFechas[-1], proximaFechas],
                                 y=[sequence[-1], prediction],
                                 mode='lines+markers',
                                 name='Predicción',
@@ -524,16 +505,16 @@ elif section == "🎯 Predicción Interactiva":
                             ))
                             
                             # Agregar valor real si existe
-                            if real_value is not None:
-                                fig_seq.add_trace(go.Scatter(
-                                    x=[next_date],
-                                    y=[real_value],
+                            if valorReal is not None:
+                                figSecuenciasPerso.add_trace(go.Scatter(
+                                    x=[proximaFechas],
+                                    y=[valorReal],
                                     mode='markers',
                                     name='Valor Real',
                                     marker=dict(size=10, color='green', symbol='diamond')
                                 ))
                             
-                            fig_seq.update_layout(
+                            figSecuenciasPerso.update_layout(
                                 title='Secuencia de 60 días + Predicción',
                                 xaxis_title='Fecha',
                                 yaxis_title='Temperatura (°C)',
@@ -542,17 +523,19 @@ elif section == "🎯 Predicción Interactiva":
                                 template='plotly_white'
                             )
                             
-                            st.plotly_chart(fig_seq, use_container_width=True)
+                            st.plotly_chart(figSecuenciasPerso, use_container_width=True)
                     
                     except KeyError:
-                        st.error("❌ La fecha seleccionada no existe en el dataset.")
+                        st.error("La fecha seleccionada no existe en el dataset.")
         
-        # ========== TAB 2: PREDICCIÓN PERSONALIZADA ==========
+        #  TAB 2: PREDICCIÓN PERSONALIZADA
         with tab2:
             st.subheader("✏️ Predicción con Datos Personalizados")
             
             st.markdown("""
             Ingresa 60 valores de temperatura mínima diaria (en °C) separados por comas.
+            Recuerda que el modelo fue entrenado con datos de Melbourne, Australia,
+            por lo que los valores deben estar en un rango razonable. Gracias :) 
             
             **Ejemplo:**
             ```
@@ -561,7 +544,7 @@ elif section == "🎯 Predicción Interactiva":
             """)
             
             # Campo de texto para ingresar valores
-            user_input = st.text_area(
+            entradaUsuario = st.text_area(
                 "Ingresa 60 valores de temperatura (separados por comas):",
                 height=150,
                 placeholder="10.5, 11.2, 9.8, 12.1, 13.4, ...",
@@ -571,15 +554,15 @@ elif section == "🎯 Predicción Interactiva":
             col1, col2 = st.columns([1, 3])
             
             with col1:
-                predict_button = st.button("🔮 Predecir", key="predict_custom", type="primary")
+                botonPrediccion = st.button("🔮 Predecir", key="predict_custom", type="primary")
             
-            if predict_button:
-                if not user_input.strip():
+            if botonPrediccion:
+                if not entradaUsuario.strip():
                     st.error("❌ Por favor ingresa los valores de temperatura.")
                 else:
                     try:
                         # Parsear valores
-                        values = [float(x.strip()) for x in user_input.split(',')]
+                        values = [float(x.strip()) for x in entradaUsuario.split(',')]
                         
                         # Validar cantidad
                         if len(values) != 60:
@@ -594,7 +577,7 @@ elif section == "🎯 Predicción Interactiva":
                             
                             # Hacer predicción
                             with st.spinner('Calculando predicción...'):
-                                prediction = make_prediction(sequence, model, scaler)
+                                prediction = realizarPrediccion(sequence, model, scaler)
                             
                             # Mostrar resultado
                             st.success("✅ Predicción completada!")
@@ -616,9 +599,9 @@ elif section == "🎯 Predicción Interactiva":
                             col1, col2 = st.columns([2, 1])
                             
                             with col1:
-                                fig_custom = go.Figure()
+                                figPrediccionPersonalizada = go.Figure()
                                 
-                                fig_custom.add_trace(go.Scatter(
+                                figPrediccionPersonalizada.add_trace(go.Scatter(
                                     y=sequence,
                                     mode='lines+markers',
                                     name='Temperaturas Ingresadas',
@@ -628,7 +611,7 @@ elif section == "🎯 Predicción Interactiva":
                                 ))
                                 
                                 # Agregar predicción
-                                fig_custom.add_trace(go.Scatter(
+                                figPrediccionPersonalizada.add_trace(go.Scatter(
                                     x=[59, 60],
                                     y=[sequence[-1], prediction],
                                     mode='lines+markers',
@@ -638,7 +621,7 @@ elif section == "🎯 Predicción Interactiva":
                                     hovertemplate='Día %{x}<br>Temp: %{y:.2f}°C<extra></extra>'
                                 ))
                                 
-                                fig_custom.update_layout(
+                                figPrediccionPersonalizada.update_layout(
                                     title='Secuencia de 60 días + Predicción',
                                     xaxis_title='Día',
                                     yaxis_title='Temperatura (°C)',
@@ -647,7 +630,7 @@ elif section == "🎯 Predicción Interactiva":
                                     template='plotly_white'
                                 )
                                 
-                                st.plotly_chart(fig_custom, use_container_width=True)
+                                st.plotly_chart(figPrediccionPersonalizada, use_container_width=True)
                             
                             with col2:
                                 st.markdown("### 📈 Estadísticas")
@@ -663,18 +646,18 @@ elif section == "🎯 Predicción Interactiva":
                     except ValueError:
                         st.error("❌ Error al procesar los valores. Asegúrate de ingresar solo números separados por comas.")
 
-# ============================================================================
-# SECCIÓN 3: VISUALIZACIONES
-# ============================================================================
+#
+# SECCIÓN 3: VISUALIZACIONES DEL NOTEBOOK DE ENTRENAMIENTO
+#
 
-elif section == "📈 Visualizaciones":
+elif seccion == "📈 Visualizaciones":
     
     st.header("📈 Visualizaciones del Modelo")
     
     # Verificar existencia de imágenes
-    images_dir = Path('outputs')
+    imagesEntrada = Path('outputs')
     
-    available_images = {
+    imagenesEsperadas = {
         'Predicciones Optimizadas': 'predictions_optimized.png',
         'Gráfico de Dispersión': 'scatter_optimized.png',
         'Análisis de Errores': 'error_analysis_optimized.png',
@@ -683,13 +666,13 @@ elif section == "📈 Visualizaciones":
     }
     
     # Crear tabs para las imágenes
-    tabs = st.tabs(list(available_images.keys()))
+    tabs = st.tabs(list(imagenesEsperadas.keys()))
     
-    for tab, (title, filename) in zip(tabs, available_images.items()):
+    for tab, (title, filename) in zip(tabs, imagenesEsperadas.items()):
         with tab:
-            image_path = images_dir / filename
-            if image_path.exists():
-                image = Image.open(image_path)
+            imagePath = imagesEntrada / filename #
+            if imagePath.exists():
+                image = Image.open(imagePath)
                 st.image(image, use_container_width=True, caption=title)
             else:
                 st.warning(f"⚠️ No se encontró la imagen: {filename}")
@@ -699,23 +682,23 @@ elif section == "📈 Visualizaciones":
     st.subheader("📊 Tabla de Resultados de Optimización")
     
     try:
-        opt_results = pd.read_csv('outputs/optimization_results.csv')
-        st.dataframe(opt_results, use_container_width=True, height=400)
+        resultadosOptimos = pd.read_csv('outputs/optimization_results.csv')
+        st.dataframe(resultadosOptimos, use_container_width=True, height=400)
         
         # Gráfico interactivo de resultados
         st.subheader("📈 Resultados de Grid Search")
         
-        fig_opt = go.Figure()
+        figResultadosOptimos = go.Figure()
         
-        fig_opt.add_trace(go.Scatter(
-            x=list(range(len(opt_results))),
-            y=opt_results['RMSE'],
+        figResultadosOptimos.add_trace(go.Scatter(
+            x=list(range(len(resultadosOptimos))),
+            y=resultadosOptimos['RMSE'],
             mode='lines+markers',
             name='RMSE',
-            marker=dict(size=8, color=opt_results['RMSE'], colorscale='Viridis', showscale=True)
+            marker=dict(size=8, color=resultadosOptimos['RMSE'], colorscale='Viridis', showscale=True)
         ))
         
-        fig_opt.update_layout(
+        figResultadosOptimos.update_layout(
             title='RMSE por Configuración de Hiperparámetros',
             xaxis_title='Configuración',
             yaxis_title='RMSE',
@@ -723,16 +706,16 @@ elif section == "📈 Visualizaciones":
             template='plotly_white'
         )
         
-        st.plotly_chart(fig_opt, use_container_width=True)
+        st.plotly_chart(figResultadosOptimos, use_container_width=True)
         
     except FileNotFoundError:
         st.info("ℹ️ No se encontró el archivo de resultados de optimización.")
 
-# ============================================================================
+#
 # SECCIÓN 4: CONFIGURACIÓN DEL MODELO
-# ============================================================================
 
-elif section == "⚙️ Configuración del Modelo":
+
+elif seccion == "⚙️ Configuración del Modelo":
     
     st.header("⚙️ Configuración del Modelo LSTM")
     
@@ -741,7 +724,7 @@ elif section == "⚙️ Configuración del Modelo":
     with col1:
         st.subheader("🎯 Hiperparámetros Óptimos")
         
-        config_data = {
+        valoresConfiguracion = {
             "Parámetro": [
                 "Sequence Length",
                 "LSTM Units",
@@ -762,16 +745,16 @@ elif section == "⚙️ Configuración del Modelo":
             ]
         }
         
-        config_df = pd.DataFrame(config_data)
-        st.table(config_df)
+        configDf = pd.DataFrame(valoresConfiguracion)
+        st.table(configDf)
     
     with col2:
         st.subheader("📊 Información del Dataset")
         
-        df_original = load_dataset()
+        dfOriginal = cargaDataset()
         
-        if df_original is not None:
-            dataset_info = {
+        if dfOriginal is not None:
+            datasetInfo = {
                 "Métrica": [
                     "Total de Observaciones",
                     "Período",
@@ -781,16 +764,16 @@ elif section == "⚙️ Configuración del Modelo":
                     "Desviación Estándar"
                 ],
                 "Valor": [
-                    f"{len(df_original)} días",
-                    f"{df_original.index[0].strftime('%Y-%m-%d')} a {df_original.index[-1].strftime('%Y-%m-%d')}",
-                    f"{df_original['Temp'].mean():.2f}°C",
-                    f"{df_original['Temp'].max():.2f}°C",
-                    f"{df_original['Temp'].min():.2f}°C",
-                    f"{df_original['Temp'].std():.2f}°C"
+                    f"{len(dfOriginal)} días",
+                    f"{dfOriginal.index[0].strftime('%Y-%m-%d')} a {dfOriginal.index[-1].strftime('%Y-%m-%d')}",
+                    f"{dfOriginal['Temp'].mean():.2f}°C",
+                    f"{dfOriginal['Temp'].max():.2f}°C",
+                    f"{dfOriginal['Temp'].min():.2f}°C",
+                    f"{dfOriginal['Temp'].std():.2f}°C"
                 ]
             }
             
-            dataset_df = pd.DataFrame(dataset_info)
+            dataset_df = pd.DataFrame(datasetInfo)
             st.table(dataset_df)
     
     st.markdown("---")
@@ -820,7 +803,7 @@ elif section == "⚙️ Configuración del Modelo":
     # Detalles de entrenamiento
     st.subheader("📈 Detalles de Entrenamiento")
     
-    training_details = """
+    detallesDeENtrenamiento = """
     ### Proceso de Optimización
     
     1. **Grid Search** sobre hiperparámetros:
@@ -839,16 +822,18 @@ elif section == "⚙️ Configuración del Modelo":
     5. **Métricas:** MAE, RMSE, MAPE, R²
     """
     
-    st.markdown(training_details)
+    st.markdown(detallesDeENtrenamiento)
 
-# ============================================================================
-# FOOTER
-# ============================================================================
+#
+# PIE DE PÁGINA
+#
 
 st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: #666; padding: 2rem 0;'>
     <p>🎓 <b>Proyecto Final - Modelos Predictivos</b></p>
     <p>Predicción de Temperaturas Mínimas con LSTM | Melbourne, Australia (1981-1990)</p>
+    <p> <b> Alumnos: <b> </p>
+    <p> Arturo Cantú Olivarez | Diego Sebastian Cruz Cervantes </p>
 </div>
 """, unsafe_allow_html=True)
