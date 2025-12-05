@@ -2,6 +2,9 @@
 
 Modelo de series temporales para predecir temperaturas mínimas diarias usando redes neuronales LSTM.
 
+## Despliegue 
+link aquí 
+
 ## Dataset
 
 **Temperaturas Mínimas Diarias - Melbourne, Australia (1981-1990)**
@@ -29,22 +32,29 @@ Modelo de series temporales para predecir temperaturas mínimas diarias usando r
 ```
 proyecto_final/
 ├── data/
-│   └── 1_Daily_minimum_temps.xls   # Dataset
+│   └── 1_Daily_minimum_temps.xls   # Dataset original (3,650 obs)
 ├── notebooks/
-│   └── analysis.ipynb              # Análisis completo
+│   └── analysis.ipynb              # Notebook de análisis completo
 ├── src/
 │   ├── data_loader.py              # Carga y preprocesamiento
 │   ├── eda.py                      # Análisis exploratorio
 │   ├── model.py                    # Arquitectura LSTM
-│   ├── train.py                    # Entrenamiento
-│   ├── evaluate.py                 # Evaluación
-│   └── optimizer.py                # Optimización de hiperparámetros
+│   ├── train.py                    # Pipeline de entrenamiento
+│   ├── evaluate.py                 # Evaluación y métricas
+│   └── optimizer.py                # Grid search
 ├── outputs/
-│   ├── best_model_final.keras      # Modelo entrenado
-│   ├── optimization_results.csv    # Resultados de búsqueda
-│   └── *.png                       # Visualizaciones
-├── requirements.txt
-└── README.md
+│   ├── best_model_final.keras      # Modelo optimizado (19K params)
+│   ├── final_metrics.csv           # Métricas finales
+│   ├── optimization_results.csv    # Resultados grid search
+│   ├── predictions_optimized.png   # Gráfico predicciones
+│   ├── scatter_optimized.png       # Scatter plot
+│   ├── error_analysis_optimized.png # Análisis de errores
+│   └── training_history_optimized.png # Historia entrenamiento
+├── app_streamlit.py                # Aplicación web interactiva
+├── requirements.txt                # Dependencias Python
+├── README.md                       # Este documento
+└── reporte/
+    └── reporte.md         #Reporte técnico
 ```
 
 ## Instalación
@@ -109,6 +119,9 @@ results = evaluate_model(model, X_test, y_test, loader.scaler)
 - seaborn
 - statsmodels
 
-## Autor
+## Autores
 
+Arturo Cantú Olivarez | Diego Sebastian Cruz Cervantes
 Proyecto Final - Modelos Predictivos
+
+
