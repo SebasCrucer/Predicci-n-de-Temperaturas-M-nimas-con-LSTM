@@ -2,6 +2,7 @@
 
 **Proyecto Final - Modelos Predictivos**  
 **Alumnos:** Arturo Cantú Olivarez | Diego Sebastian Cruz Cervantes   
+**Repositorio: ** [Link al repositorio](https://github.com/SebasCrucer/Predicci-n-de-Temperaturas-M-nimas-con-LSTM)
 **Despliegue :** [Streamlit App](https://proyecto-final-modelos-predictivos.streamlit.app)
 
 ---
