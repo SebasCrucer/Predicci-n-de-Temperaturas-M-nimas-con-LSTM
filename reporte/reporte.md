@@ -425,7 +425,7 @@ proyecto_final/
 │   ├── evaluate.py                 # Evaluación y métricas
 │   └── optimizer.py                # Grid search
 ├── outputs/
-│   ├── best_model_final.keras      # Modelo optimizado (25K params)
+│   ├── best_model_final.keras      # Modelo optimizado (19K params)
 │   ├── final_metrics.csv           # Métricas finales
 │   ├── optimization_results.csv    # Resultados grid search
 │   ├── predictions_optimized.png   # Gráfico predicciones
