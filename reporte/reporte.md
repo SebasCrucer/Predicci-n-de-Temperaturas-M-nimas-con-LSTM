@@ -2,7 +2,7 @@
 
 **Proyecto Final - Modelos Predictivos**  
 **Alumnos:** Arturo Cantú Olivarez | Diego Sebastian Cruz Cervantes   
-**Despliegue :** link desplegado. Esperando a que se despliegue. No se despliega....
+**Despliegue :** [Streamlit App](https://proyecto-final-modelos-predictivos.streamlit.app)
 
 ---
 
@@ -456,5 +456,5 @@ python src/train.py
 #### Aplicación web:
 ```bash
 streamlit run app_streamlit.py
-# Acceder a: LINK DE DESPLIEGUE - ESPERANDO A SEBASTIAN
+https://proyecto-final-modelos-predictivos.streamlit.app 
 ```
